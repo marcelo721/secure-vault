@@ -59,7 +59,7 @@ MVP full-stack de um cofre digital para armazenar credenciais, chaves de API e n
 | Build | Maven, npm |
 
 
-3. Por que Java com Spring Boot?
+## 3. Por que Java com Spring Boot?
 
 A escolha de Java com Spring Boot foi motivada pela necessidade de construir um backend seguro, organizado e fácil de manter, sem aumentar desnecessariamente a complexidade do MVP.
 
