@@ -1,0 +1,24 @@
+# Perfil de testes: usa o banco dedicado vault_test_db.
+# As credenciais do banco vêm do .env/variáveis de ambiente (DB_USERNAME/DB_PASSWORD),
+# a menos que TEST_DB_USERNAME/TEST_DB_PASSWORD sejam definidos.
+# JWT_SECRET e a chave de criptografia abaixo são valores fictícios, válidos somente para testes.
+spring:
+  datasource:
+    url: ${TEST_DB_URL:jdbc:postgresql://localhost:5432/vault_test_db}
+    username: ${TEST_DB_USERNAME:${DB_USERNAME}}
+    password: ${TEST_DB_PASSWORD:${DB_PASSWORD}}
+
+app:
+  jwt:
+    secret: test-only-jwt-secret-not-for-production-0123456789abcdef
+    expiration-minutes: 60
+  crypto:
+    key: dGVzdC1vbmx5LWtleS0zMi1ieXRlcy1sb25nLTEyMzQ=
+  password:
+    bcrypt-strength: 4
+  login-attempts:
+    max-failures: 5
+    window-minutes: 15
+    lock-minutes: 15
+  request:
+    max-body-bytes: 65536
