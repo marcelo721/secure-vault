@@ -58,7 +58,47 @@ MVP full-stack de um cofre digital para armazenar credenciais, chaves de API e n
 | Frontend | React 18, TypeScript, Vite 5, Tailwind CSS 3, React Router 6, lucide-react |
 | Build | Maven, npm |
 
-## 3. Arquitetura
+
+3. Por que Java com Spring Boot?
+
+A escolha de Java com Spring Boot foi motivada pela necessidade de construir um backend seguro, organizado e fácil de manter, sem aumentar desnecessariamente a complexidade do MVP.
+
+Java
+
+Tipagem estática: ajuda a identificar inconsistências durante o desenvolvimento e favorece a manutenção do código.
+
+Orientação a objetos: facilita separar responsabilidades e organizar regras de negócio em componentes bem definidos.
+
+Ecossistema maduro: oferece bibliotecas consolidadas para criptografia, autenticação, validação e persistência de dados.
+
+Portabilidade: permite executar a aplicação em diferentes ambientes que disponibilizem uma JVM compatível.
+
+Spring Boot
+
+Desenvolvimento de APIs REST: simplifica a criação de endpoints HTTP e a integração com o frontend React.
+
+Injeção de dependências: reduz o acoplamento entre controllers, serviços e repositórios, facilitando testes e manutenção.
+
+Spring Security: fornece mecanismos para autenticação, autorização e integração com filtros de segurança.
+
+Spring Data JPA: simplifica o acesso ao banco de dados e a implementação da camada de persistência.
+
+Bean Validation: permite validar os dados de entrada de forma declarativa, reduzindo a duplicação de regras.
+
+Integração com Flyway: permite controlar a evolução do esquema do banco por meio de migrações versionadas.
+
+Testabilidade: integra-se com JUnit, Mockito e MockMvc, permitindo verificar regras de negócio, endpoints e comportamentos relacionados à segurança.
+
+Relação com os objetivos do projeto
+
+Como o desafio prioriza backend e segurança, Java com Spring Boot permite concentrar o esforço nas regras de autorização por proprietário, no gerenciamento da sessão, na validação das requisições e na proteção dos dados confidenciais com AES-256-GCM.
+
+A combinação também favorece uma arquitetura em camadas, com responsabilidades separadas entre controllers, serviços e repositórios. Isso torna o código mais fácil de testar, revisar e evoluir.
+
+Trade-off: o ecossistema Spring oferece muitas abstrações e exige familiaridade com configuração e injeção de dependências. Para este MVP, esse custo é compensado pelos recursos integrados e pela estrutura que a plataforma oferece para desenvolver e testar uma API segura.
+
+
+## 4. Arquitetura
 
 ```text
 Navegador (React SPA)
@@ -93,7 +133,7 @@ Nenhum endpoint deve confiar em um ID de proprietário enviado pelo cliente.
 
 Os pacotes do backend, sob `com.securevault`, são organizados em `config`, `security`, `auth`, `user`, `vault`, `crypto` e `exception`.
 
-## 4. Estrutura de diretórios
+## 5. Estrutura de diretórios
 
 ```text
 secure-vault/
@@ -128,7 +168,7 @@ secure-vault/
         └── lib/
 ```
 
-## 5. Pré-requisitos
+## 6. Pré-requisitos
 
 - JDK 21.
 - Maven 3.9 ou superior.
@@ -137,9 +177,9 @@ secure-vault/
 
 **Não é necessário instalar PostgreSQL.** O projeto utiliza H2 em memória para simplificar a execução local.
 
-## 6. Configuração do ambiente
+## 7. Configuração do ambiente
 
-### 6.1. Arquivo de variáveis
+### 7.1. Arquivo de variáveis
 
 Na raiz do repositório, mantenha `example.env` como modelo e crie uma cópia chamada `.env`.
 
@@ -171,7 +211,7 @@ CORS_ALLOWED_ORIGINS=http://localhost:5173
 
 Os valores acima são ilustrativos. Gere seus próprios segredos e não publique o arquivo `.env`.
 
-### 6.2. Geração das chaves no Windows
+### 7.2. Geração das chaves no Windows
 
 Para gerar a chave de criptografia AES-256 no PowerShell:
 
@@ -189,7 +229,7 @@ O resultado representa 32 bytes aleatórios em Base64. Não gere uma chave nova 
 
 Para o `JWT_SECRET`, utilize um segredo forte, independente da chave AES.
 
-### 6.3. Carregamento das variáveis pelo Spring Boot
+### 7.3. Carregamento das variáveis pelo Spring Boot
 
 No `backend/src/main/resources/application.properties`, a configuração para carregar o `.env` da raiz do repositório, ao executar a aplicação a partir de `backend/`, é:
 
@@ -215,7 +255,7 @@ O arquivo `example.env` serve apenas como modelo. Ele não será carregado pela 
 
 Variáveis de ambiente do sistema podem sobrescrever os valores do arquivo importado.
 
-### 6.4. Banco de dados H2
+### 7.4. Banco de dados H2
 
 O projeto utiliza H2 em memória, configurado no `application.properties`:
 
@@ -237,7 +277,7 @@ O Flyway executa as migrações na inicialização, e o Hibernate valida o esque
 
 **Limitação importante:** o banco é volátil. Os registros armazenados são perdidos quando a aplicação termina e o banco em memória é encerrado. Essa configuração é adequada para desenvolvimento e demonstração, mas não para armazenar dados reais de forma persistente.
 
-## 7. Executando
+## 8. Executando
 
 ### Backend
 
@@ -280,7 +320,7 @@ Os arquivos gerados ficam em `frontend/dist`.
 
 O projeto ainda exige configuração de hospedagem do frontend e de proxy reverso para uma implantação de produção. Utilize HTTPS e `COOKIE_SECURE=true` em produção.
 
-## 8. Testes
+## 9. Testes
 
 ### Backend
 
@@ -321,7 +361,7 @@ O frontend não possui testes automatizados nesta versão.
 
 **Antes de apresentar o projeto, execute os dois comandos e registre os resultados reais.** Não declare os testes aprovados sem executá-los.
 
-## 9. API
+## 10. API
 
 Prefixo: `/api/v1`.
 
@@ -341,7 +381,7 @@ As requisições que alteram estado podem exigir o cabeçalho `X-XSRF-TOKEN`, co
 
 Consulte os controllers e a configuração de segurança para confirmar os códigos HTTP e os detalhes exatos de cada endpoint.
 
-## 10. Segurança
+## 11. Segurança
 
 ### Autenticação e sessão
 
@@ -382,7 +422,7 @@ Consulte os controllers e a configuração de segurança para confirmar os códi
 
 Essas medidas precisam ser validadas nos testes e revisadas antes de uma implantação real.
 
-## 11. Decisões técnicas
+## 12. Decisões técnicas
 
 - **H2 em memória:** reduz o trabalho de configuração e facilita a demonstração local. A desvantagem é a perda dos dados ao encerrar a aplicação.
 - **Cookie HttpOnly em vez de JWT no localStorage:** reduz a exposição do token ao JavaScript, mas exige proteção CSRF.
@@ -391,7 +431,7 @@ Essas medidas precisam ser validadas nos testes e revisadas antes de uma implant
 - **Repositório restrito por proprietário:** reduz o risco de acesso indevido a registros.
 - **Escopo reduzido:** prioriza backend, segurança, autenticação, criptografia e funcionalidades essenciais do cofre.
 
-## 12. Limitações conhecidas
+## 13. Limitações conhecidas
 
 - Os dados do H2 em memória não são persistentes.
 - O JWT não pode ser revogado no servidor antes de expirar, salvo implementação adicional.
@@ -403,7 +443,7 @@ Essas medidas precisam ser validadas nos testes e revisadas antes de uma implant
 - A implantação de produção, o proxy reverso e o HTTPS precisam ser configurados separadamente.
 - Não foi realizada auditoria de segurança ou teste de penetração.
 
-## 13. Próximas versões
+## 14. Próximas versões
 
 Itens planejados, não necessariamente implementados:
 
@@ -419,7 +459,7 @@ Itens planejados, não necessariamente implementados:
 - OpenAPI/Swagger.
 - Testes automatizados do frontend.
 
-## 14. Publicação no GitHub
+## 15. Publicação no GitHub
 
 Antes de publicar:
 
