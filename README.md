@@ -1,324 +1,455 @@
 # Cofre Digital Seguro
 
-MVP full-stack de um cofre digital: usuários autenticados guardam credenciais, chaves de API e notas privadas, e só eles conseguem ler, alterar ou excluir os próprios registros. Os segredos ficam criptografados no banco (AES-256-GCM).
+MVP full-stack de um cofre digital para armazenar credenciais, chaves de API e notas privadas. Cada usuário pode acessar e gerenciar apenas os próprios registros, cujos dados confidenciais são criptografados com AES-256-GCM.
 
-> **Estado da validação.** O backend e o frontend foram escritos e revisados, mas o ambiente em que este código foi produzido bloqueava o acesso ao Maven Central e ao registro do npm. Por isso, **`mvn test` e `npm run build` ainda não foram executados**. Rode ambos (seção [Testes](#testes)) antes de publicar ou apresentar o projeto, e corrija qualquer falha que apareça.
+> **Estado do projeto:** backend e frontend implementados, mas os testes e o build precisam ser executados no ambiente local antes da apresentação ou publicação do projeto.
 
 ## Sumário
 
-1. [Funcionalidades](#funcionalidades)
-2. [Tecnologias](#tecnologias)
-3. [Arquitetura](#arquitetura)
-4. [Estrutura de diretórios](#estrutura-de-diretórios)
-5. [Pré-requisitos](#pré-requisitos)
-6. [Configuração do ambiente](#configuração-do-ambiente)
-7. [Executando](#executando)
-8. [Testes](#testes)
-9. [API](#api)
-10. [Segurança](#segurança)
-11. [Trade-offs e decisões técnicas](#trade-offs-e-decisões-técnicas)
-12. [Limitações conhecidas](#limitações-conhecidas)
-13. [Próximas versões](#próximas-versões)
-14. [Publicação no GitHub](#publicação-no-github)
+1. Funcionalidades
+2. Tecnologias
+3. Arquitetura
+4. Estrutura de diretórios
+5. Pré-requisitos
+6. Configuração do ambiente
+7. Executando
+8. Testes
+9. API
+10. Segurança
+11. Decisões técnicas
+12. Limitações conhecidas
+13. Próximas versões
+14. Publicação no GitHub
 
-## Funcionalidades
+## 1. Funcionalidades
 
-**Autenticação**
-- Cadastro, login, logout e consulta do usuário autenticado (`/auth/me`).
-- Senhas com hash BCrypt (custo 12).
-- Sessão por JWT em cookie `HttpOnly`, com expiração configurável.
+### Autenticação
+- Cadastro, login, logout e consulta do usuário autenticado.
+- Senhas armazenadas com hash BCrypt, custo 12.
+- Autenticação por JWT em cookie `HttpOnly`.
+- Expiração configurável da sessão.
 - Bloqueio temporário após tentativas de login malsucedidas.
 
-**Cofre**
-- CRUD completo de registros dos tipos `CREDENTIAL`, `API_KEY`, `SECURE_NOTE` e `OTHER`.
-- Campos: título, tipo, usuário/identificador (opcional), segredo, URL (opcional), descrição (opcional), datas de criação e atualização.
-- Cada usuário enxerga apenas os próprios registros.
+### Cofre
+- CRUD de registros dos tipos `CREDENTIAL`, `API_KEY`, `SECURE_NOTE` e `OTHER`.
+- Campos: título, tipo, usuário/identificador, segredo, URL, descrição e datas.
+- Acesso restrito aos registros do usuário autenticado.
+- Segredos e identificadores confidenciais criptografados no banco.
 
-**Frontend**
-- Telas de login, cadastro, dashboard (com busca por texto e filtro por tipo), detalhe, criação e edição.
-- Segredo mascarado por padrão, com botões de mostrar/ocultar e copiar. Ao revelar, volta a ficar oculto sozinho após 30 segundos.
-- Exclusão com diálogo de confirmação, estados de carregamento, erro e vazio, e tratamento de sessão expirada.
+### Frontend
+- Telas de login, cadastro, dashboard, detalhe, criação e edição.
+- Busca por texto e filtro por tipo.
+- Segredo oculto por padrão, com opções para revelar e copiar.
+- Ocultação automática do segredo revelado após 30 segundos.
+- Confirmação antes da exclusão.
+- Estados de carregamento, erro e lista vazia.
+- Tratamento de sessão expirada.
 
-## Tecnologias
+## 2. Tecnologias
 
 | Camada | Tecnologias |
 |---|---|
-| Backend | Java 21, Spring Boot 3.5.7, Spring Web, Spring Security, Spring Data JPA, Bean Validation, Flyway, jjwt 0.12.6, Maven |
-| Banco | H2 database(Banco em memória) |
+| Backend | Java 21, Spring Boot 3.5.7, Spring Web, Spring Security, Spring Data JPA, Bean Validation |
+| Persistência | H2 Database em memória |
+| Migrações | Flyway |
+| Autenticação | JWT, jjwt 0.12.6, BCrypt |
+| Criptografia | AES-256-GCM |
 | Testes | JUnit 5, Mockito, Spring Security Test, MockMvc |
 | Frontend | React 18, TypeScript, Vite 5, Tailwind CSS 3, React Router 6, lucide-react |
+| Build | Maven, npm |
 
-## Arquitetura
+## 3. Arquitetura
 
-```
+```text
 Navegador (React SPA)
-   │  /api/*  (mesma origem em dev, via proxy do Vite)
-   ▼
-Spring Boot ── RequestSizeLimitFilter → JwtAuthenticationFilter → CSRF → autorização
-   │            controller → service → repository (JPA)
-   ▼
-PostgreSQL (Flyway: V1 users, V2 vault_items)
+        |
+        | /api/*
+        v
+Spring Boot
+  |
+  +-- RequestSizeLimitFilter
+  +-- JwtAuthenticationFilter
+  +-- CSRF e autorização
+  |
+  v
+Controller -> Service -> Repository
+                          |
+                          v
+                     H2 Database
+                     em memória
+
+Flyway -> Migrações do banco
 ```
 
-Fluxo de autenticação:
+### Fluxo de autenticação
 
-1. `POST /auth/login` valida as credenciais e responde com `Set-Cookie: vault_token=<JWT>; HttpOnly; SameSite=Strict; Path=/api`.
-2. O navegador envia o cookie automaticamente. O `JwtAuthenticationFilter` valida assinatura, emissor e expiração e coloca o ID do usuário no contexto de segurança.
-3. Controllers e services só usam esse ID. **Nenhum endpoint aceita ID de usuário vindo do cliente.**
+1. O usuário envia suas credenciais para o endpoint de login.
+2. O backend valida as credenciais e retorna um cookie JWT `HttpOnly`.
+3. O navegador envia o cookie automaticamente nas requisições seguintes.
+4. O filtro JWT valida a assinatura, o emissor e a expiração do token.
+5. O ID do usuário autenticado é utilizado para controlar o acesso aos registros.
 
-Pacotes do backend (`com.securevault`): `config`, `security`, `auth`, `user`, `vault`, `crypto`, `exception`.
+Nenhum endpoint deve confiar em um ID de proprietário enviado pelo cliente.
 
-## Estrutura de diretórios
+Os pacotes do backend, sob `com.securevault`, são organizados em `config`, `security`, `auth`, `user`, `vault`, `crypto` e `exception`.
 
-```
+## 4. Estrutura de diretórios
+
+```text
 secure-vault/
-├── .env.example            # variáveis fictícias (copie para .env)
 ├── .gitignore
+├── example.env             # Modelo de configuração
+├── .env                    # Configuração local, não versionada
 ├── README.md
 ├── backend/
 │   ├── pom.xml
 │   └── src/
-│       ├── main/java/com/securevault/{config,security,auth,user,vault,crypto,exception}
-│       ├── main/resources/{application.yml,db/migration/}
-│       └── test/                      # testes unitários e de integração
+│       ├── main/java/com/securevault/
+│       │   ├── config/
+│       │   ├── security/
+│       │   ├── auth/
+│       │   ├── user/
+│       │   ├── vault/
+│       │   ├── crypto/
+│       │   └── exception/
+│       ├── main/resources/
+│       │   ├── application.properties
+│       │   └── db/migration/
+│       └── test/
 └── frontend/
-    ├── package.json, vite.config.ts, tailwind.config.js
-    └── src/{api,auth,components,pages,lib}
+    ├── package.json
+    ├── vite.config.ts
+    ├── tailwind.config.js
+    └── src/
+        ├── api/
+        ├── auth/
+        ├── components/
+        ├── pages/
+        └── lib/
 ```
 
-## Pré-requisitos
+## 5. Pré-requisitos
 
-- JDK 21
-- Maven 3.9+
-- Node.js 20+ e npm
-- PostgreSQL 14+ (o projeto foi escrito contra o 16) instalado na máquina
+- JDK 21.
+- Maven 3.9 ou superior.
+- Node.js 20 ou superior.
+- npm.
 
-## Configuração do ambiente
+**Não é necessário instalar PostgreSQL.** O projeto utiliza H2 em memória para simplificar a execução local.
 
-### 1. PostgreSQL local
+## 6. Configuração do ambiente
 
-**Linux (Debian/Ubuntu)**
-```bash
-sudo apt install postgresql
-sudo systemctl start postgresql      # ou: sudo pg_ctlcluster 16 main start
-```
-**macOS (Homebrew)**
-```bash
-brew install postgresql@16 && brew services start postgresql@16
-```
-**Windows:** instale pelo instalador oficial e inicie o serviço "postgresql-x64-16" (Serviços do Windows).
+### 6.1. Arquivo de variáveis
 
-### 2. Usuário e bancos
+Na raiz do repositório, mantenha `example.env` como modelo e crie uma cópia chamada `.env`.
 
-Escolha uma senha forte e substitua `SUA_SENHA_AQUI` (não a versione em lugar nenhum). No Linux, entre com `sudo -u postgres psql`; nos demais sistemas, use o `psql` com o superusuário que você configurou.
+No PowerShell, execute a partir da raiz do projeto:
 
-```sql
-CREATE USER vault_app WITH PASSWORD 'SUA_SENHA_AQUI';
-CREATE DATABASE vault_db      OWNER vault_app;
-CREATE DATABASE vault_test_db OWNER vault_app;
+```powershell
+Copy-Item example.env .env
 ```
 
-`vault_db` é o banco da aplicação. `vault_test_db` é dedicado aos testes de integração, que **apagam os dados** das tabelas antes de cada teste. Nunca aponte os testes para o banco real.
-
-Verifique a conexão:
-```bash
-psql -h localhost -U vault_app -d vault_db -c "select 1"
-```
-
-### 3. Arquivo `.env`
-
-Na raiz do repositório:
-```bash
-cp .env.example .env
-```
-Edite o `.env` e preencha:
+Edite o arquivo `.env` e configure as variáveis:
 
 | Variável | Descrição |
 |---|---|
-| `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | Conexão com `vault_db` |
-| `TEST_DB_URL` | Conexão com `vault_test_db` (usa as mesmas credenciais, salvo `TEST_DB_USERNAME`/`TEST_DB_PASSWORD`) |
-| `JWT_SECRET` | Mínimo de 32 caracteres. `openssl rand -base64 48` |
-| `JWT_EXPIRATION_MINUTES` | Duração da sessão (padrão 60) |
-| `VAULT_ENCRYPTION_KEY` | Exatamente 32 bytes em Base64. `openssl rand -base64 32` |
-| `COOKIE_SECURE` | `false` em `http://localhost`; `true` em HTTPS |
-| `CORS_ALLOWED_ORIGINS` | Origens permitidas, separadas por vírgula (sem `*`) |
+| `JWT_SECRET` | Segredo utilizado para assinar os JWTs. Utilize um valor forte, com pelo menos 32 caracteres. |
+| `JWT_EXPIRATION_MINUTES` | Duração da sessão em minutos. Padrão: 60. |
+| `VAULT_ENCRYPTION_KEY` | Chave AES-256 de exatamente 32 bytes, codificada em Base64. |
+| `COOKIE_SECURE` | `false` para desenvolvimento local em HTTP; `true` em produção com HTTPS. |
+| `CORS_ALLOWED_ORIGINS` | Origens autorizadas, como `http://localhost:5173`. |
 
-O backend lê `../.env` ao ser executado a partir de `backend/`. Variáveis de ambiente reais têm precedência sobre o arquivo. O `.env` está no `.gitignore`.
+Exemplo de estrutura:
 
-> **Atenção:** se você perder ou trocar `VAULT_ENCRYPTION_KEY`, os registros já salvos não poderão mais ser descriptografados.
-
-### 4. Migrações
-
-O Flyway roda automaticamente na inicialização do backend e cria as tabelas `users` e `vault_items`. O Hibernate apenas valida o schema (`ddl-auto=validate`). Para conferir:
-```bash
-psql -h localhost -U vault_app -d vault_db -c "select version, description, success from flyway_schema_history"
+```properties
+JWT_SECRET=SUBSTITUA_POR_UM_SEGREDO_FORTE
+JWT_EXPIRATION_MINUTES=60
+VAULT_ENCRYPTION_KEY=SUBSTITUA_PELA_CHAVE_BASE64
+COOKIE_SECURE=false
+CORS_ALLOWED_ORIGINS=http://localhost:5173
 ```
 
-## Executando
+Os valores acima são ilustrativos. Gere seus próprios segredos e não publique o arquivo `.env`.
 
-Backend (porta 8080):
-```bash
+### 6.2. Geração das chaves no Windows
+
+Para gerar a chave de criptografia AES-256 no PowerShell:
+
+```powershell
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$key = New-Object byte[] 32
+$rng.GetBytes($key)
+[Convert]::ToBase64String($key)
+$rng.Dispose()
+```
+
+Copie o resultado para `VAULT_ENCRYPTION_KEY` no `.env`.
+
+O resultado representa 32 bytes aleatórios em Base64. Não gere uma chave nova a cada inicialização: registros criptografados com a chave anterior não poderão ser descriptografados com outra chave.
+
+Para o `JWT_SECRET`, utilize um segredo forte, independente da chave AES.
+
+### 6.3. Carregamento das variáveis pelo Spring Boot
+
+No `backend/src/main/resources/application.properties`, a configuração para carregar o `.env` da raiz do repositório, ao executar a aplicação a partir de `backend/`, é:
+
+```properties
+spring.application.name=secure-vault
+spring.config.import=optional:file:../.env[.properties]
+
+app.jwt.secret=${JWT_SECRET}
+app.jwt.expiration-minutes=${JWT_EXPIRATION_MINUTES:60}
+app.jwt.issuer=secure-vault
+
+app.crypto.key=${VAULT_ENCRYPTION_KEY}
+
+app.cookie.secure=${COOKIE_SECURE:false}
+app.cors.allowed-origins=${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+```
+
+O caminho `../.env` depende do diretório de trabalho da aplicação. Se você executar o backend a partir de outro diretório, ajuste o caminho.
+
+O Spring Boot não carrega automaticamente arquivos `.env`: a propriedade `spring.config.import` é responsável por importar o arquivo. O nome configurado deve corresponder ao arquivo real.
+
+O arquivo `example.env` serve apenas como modelo. Ele não será carregado pela configuração acima, a menos que o caminho seja alterado explicitamente.
+
+Variáveis de ambiente do sistema podem sobrescrever os valores do arquivo importado.
+
+### 6.4. Banco de dados H2
+
+O projeto utiliza H2 em memória, configurado no `application.properties`:
+
+```properties
+spring.datasource.url=jdbc:h2:mem:securevault;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+spring.datasource.driver-class-name=org.h2.Driver
+spring.datasource.username=sa
+spring.datasource.password=
+
+spring.jpa.open-in-view=false
+spring.jpa.hibernate.ddl-auto=validate
+spring.jpa.properties.hibernate.jdbc.time_zone=UTC
+
+spring.flyway.enabled=true
+spring.flyway.locations=classpath:db/migration
+```
+
+O Flyway executa as migrações na inicialização, e o Hibernate valida o esquema existente.
+
+**Limitação importante:** o banco é volátil. Os registros armazenados são perdidos quando a aplicação termina e o banco em memória é encerrado. Essa configuração é adequada para desenvolvimento e demonstração, mas não para armazenar dados reais de forma persistente.
+
+## 7. Executando
+
+### Backend
+
+Em um terminal, a partir da raiz do projeto:
+
+```powershell
 cd backend
 mvn spring-boot:run
 ```
 
-Frontend (porta 5173), em outro terminal:
-```bash
+O backend será iniciado na porta 8080, caso não exista outra configuração.
+
+### Frontend
+
+Em outro terminal:
+
+```powershell
 cd frontend
 npm install
 npm run dev
 ```
 
-Abra http://localhost:5173, crie uma conta e faça login. O Vite encaminha `/api` para `http://localhost:8080` (altere com `VITE_API_PROXY_TARGET`, ver `frontend/.env.example`). Assim o navegador usa uma única origem, o que é necessário para o cookie `SameSite=Strict`.
+Abra:
 
-Build de produção do frontend: `npm run build` (saída em `frontend/dist`). O projeto não inclui servidor para os arquivos estáticos nem configuração de proxy reverso em produção (ver [Limitações](#limitações-conhecidas)).
+`http://localhost:5173`
 
-## Testes
+O Vite encaminha as requisições `/api` para o backend em `http://localhost:8080`, conforme a configuração do proxy.
 
-```bash
-cd backend
-mvn test            # exige PostgreSQL ativo e o banco vault_test_db criado
+Crie uma conta, faça login e teste as operações do cofre.
 
-cd ../frontend
-npm run build       # verifica os tipos (tsc) e gera o bundle
+### Build de produção
+
+Na pasta `frontend`:
+
+```powershell
+npm run build
 ```
 
-O backend tem testes unitários (serviços, JWT, criptografia, limitador de login) e testes de integração com MockMvc, filtros de segurança reais, Flyway e PostgreSQL. Cobrem:
+Os arquivos gerados ficam em `frontend/dist`.
 
-- cadastro válido, inválido e com e-mail duplicado; login correto e com senha errada;
-- acesso sem autenticação às rotas privadas;
-- criação e listagem restritas ao proprietário;
-- leitura, edição e exclusão de registro de **outro** usuário, que devem retornar 404 mesmo com o ID correto;
-- rejeição de payloads inválidos, grandes demais ou com campos extras (por exemplo `ownerId`);
-- verificação direto no banco de que segredo e usuário **não** estão em texto puro;
-- falhas de criptografia respondidas como erro genérico, sem vazar detalhes.
+O projeto ainda exige configuração de hospedagem do frontend e de proxy reverso para uma implantação de produção. Utilize HTTPS e `COOKIE_SECURE=true` em produção.
 
-O frontend não tem testes automatizados nesta versão.
+## 8. Testes
 
-## API
+### Backend
 
-Prefixo `/api/v1`. Não há Swagger/OpenAPI neste MVP. Requisições que alteram estado (`POST`, `PUT`, `DELETE`) exigem o cabeçalho `X-XSRF-TOKEN` com o valor do cookie `XSRF-TOKEN` (o frontend faz isso sozinho).
+Na pasta `backend`:
 
-| Método e rota | Auth | Descrição | Respostas |
+```powershell
+mvn test
+```
+
+Com a configuração H2, os testes que utilizam essa configuração não precisam de uma instância PostgreSQL.
+
+Se houver um perfil de testes separado, confira o `application-test.properties` ou `application-test.yml` para verificar qual banco ele utiliza.
+
+Os testes previstos incluem:
+
+- Serviços, JWT, criptografia e limitador de login.
+- Cadastro válido e inválido.
+- Rejeição de e-mail duplicado.
+- Login correto e incorreto.
+- Acesso não autenticado às rotas privadas.
+- Restrição dos registros ao proprietário.
+- Leitura, edição e exclusão de registros pertencentes a outros usuários.
+- Rejeição de payloads inválidos, grandes ou com campos desconhecidos.
+- Verificação da criptografia dos campos confidenciais.
+- Tratamento genérico de falhas de criptografia.
+
+### Frontend
+
+Na pasta `frontend`:
+
+```powershell
+npm run build
+```
+
+Esse comando verifica os tipos TypeScript e gera o bundle de produção.
+
+O frontend não possui testes automatizados nesta versão.
+
+**Antes de apresentar o projeto, execute os dois comandos e registre os resultados reais.** Não declare os testes aprovados sem executá-los.
+
+## 9. API
+
+Prefixo: `/api/v1`.
+
+| Método | Rota | Autenticação | Descrição |
 |---|---|---|---|
-| `POST /auth/register` | não | Cria usuário | 201, 400, 409 |
-| `POST /auth/login` | não | Autentica e define o cookie | 200, 400, 401, 429 |
-| `POST /auth/logout` | não | Remove o cookie | 204 |
-| `GET /auth/me` | sim | Usuário autenticado | 200, 401 |
-| `GET /vault-items` | sim | Lista registros do usuário (sem segredos) | 200, 401 |
-| `POST /vault-items` | sim | Cria registro | 201, 400, 401 |
-| `GET /vault-items/{id}` | sim | Detalhe, com segredo descriptografado | 200, 401, 404 |
-| `PUT /vault-items/{id}` | sim | Atualiza registro | 200, 400, 401, 404 |
-| `DELETE /vault-items/{id}` | sim | Exclui registro | 204, 401, 404 |
+| `POST` | `/auth/register` | Não | Cadastra usuário |
+| `POST` | `/auth/login` | Não | Autentica e define o cookie |
+| `POST` | `/auth/logout` | Conforme configuração de segurança | Encerra a sessão no navegador |
+| `GET` | `/auth/me` | Sim | Consulta usuário autenticado |
+| `GET` | `/vault-items` | Sim | Lista registros do usuário |
+| `POST` | `/vault-items` | Sim | Cria registro |
+| `GET` | `/vault-items/{id}` | Sim | Consulta registro e revela os campos autorizados |
+| `PUT` | `/vault-items/{id}` | Sim | Atualiza registro |
+| `DELETE` | `/vault-items/{id}` | Sim | Exclui registro |
 
-Exemplo com `curl` (o cookie e o token CSRF ficam num arquivo de cookies):
-```bash
-J=/tmp/cookies.txt
-curl -s -c $J http://localhost:8080/api/v1/auth/csrf
-X=$(awk '$6=="XSRF-TOKEN"{print $7}' $J)
+As requisições que alteram estado podem exigir o cabeçalho `X-XSRF-TOKEN`, conforme a configuração CSRF do backend. O frontend deve obter e enviar o token CSRF conforme o fluxo implementado.
 
-curl -s -b $J -c $J -X POST http://localhost:8080/api/v1/auth/register \
-  -H "Content-Type: application/json" -H "X-XSRF-TOKEN: $X" \
-  -d '{"name":"Ana","email":"ana@example.com","password":"uma-senha-bem-longa"}'
+Consulte os controllers e a configuração de segurança para confirmar os códigos HTTP e os detalhes exatos de cada endpoint.
 
-curl -s -b $J -c $J -X POST http://localhost:8080/api/v1/auth/login \
-  -H "Content-Type: application/json" -H "X-XSRF-TOKEN: $X" \
-  -d '{"email":"ana@example.com","password":"uma-senha-bem-longa"}'
-
-curl -s -b $J -X POST http://localhost:8080/api/v1/vault-items \
-  -H "Content-Type: application/json" -H "X-XSRF-TOKEN: $X" \
-  -d '{"title":"GitHub","type":"CREDENTIAL","username":"ana","secret":"s3gredo","url":"https://github.com"}'
-```
-
-Erros seguem sempre o mesmo formato:
-```json
-{
-  "timestamp": "2026-10-13T15:00:00Z",
-  "status": 400,
-  "code": "VALIDATION_ERROR",
-  "message": "Há campos inválidos na requisição.",
-  "path": "/api/v1/vault-items",
-  "fieldErrors": [{ "field": "title", "message": "O título é obrigatório." }]
-}
-```
-
-## Segurança
+## 10. Segurança
 
 ### Autenticação e sessão
-- JWT HS256 com apenas ID do usuário, emissor, emissão e expiração. A validação confere assinatura, emissor e expiração; tokens ausentes, inválidos ou expirados resultam em 401.
-- O token vive em cookie `HttpOnly` (inacessível a JavaScript, o que reduz o impacto de XSS), `SameSite=Strict`, `Path=/api` e `Secure` quando `COOKIE_SECURE=true`.
-- Como o navegador envia o cookie sozinho, há proteção CSRF por *double submit cookie*: o cookie `XSRF-TOKEN` precisa coincidir com o cabeçalho `X-XSRF-TOKEN` em toda requisição que altera estado. Isso soma-se a `SameSite=Strict` e a um CORS restrito.
-- Login protegido por limitador em memória: 5 falhas em 15 minutos para a mesma combinação IP + e-mail bloqueiam novas tentativas por 15 minutos (HTTP 429 com `Retry-After`). A mensagem de erro de credenciais é a mesma para e-mail inexistente e senha errada.
+
+- JWT assinado com HS256, com validação de assinatura, emissor e expiração.
+- Cookie `HttpOnly`, `SameSite=Strict`, `Path=/api` e atributo `Secure` configurável.
+- Proteção CSRF para requisições que alteram estado.
+- Limitador de tentativas de login em memória.
+- Respostas de erro sem stack traces ou detalhes internos.
 
 ### Autorização por proprietário
-- O repositório de registros **não herda `JpaRepository`**: só existem consultas que exigem o ID do dono (`findByIdAndOwnerId`, `deleteByIdAndOwnerId` etc.). Não existe `findById` global, então não dá para esquecer a verificação.
-- O proprietário é sempre o usuário autenticado. O DTO de entrada não tem campo de dono e o Jackson rejeita campos desconhecidos (`fail-on-unknown-properties`).
-- Registro inexistente e registro alheio geram a mesma resposta 404.
 
-### Criptografia dos registros
-- Campos confidenciais (**segredo** e **usuário/identificador**) são cifrados com **AES-256-GCM**, com nonce aleatório de 96 bits novo a cada operação.
-- Formato armazenado em `BYTEA`: `[versão: 1 byte][nonce: 12 bytes][texto cifrado + tag de 16 bytes]`.
-- Dados autenticados adicionais (AAD) ligam cada texto cifrado ao proprietário, ao registro e ao campo. Mover um valor cifrado para outro registro faz a descriptografia falhar.
-- A chave vem só de `VAULT_ENCRYPTION_KEY` e nunca é gravada no banco. A aplicação se recusa a iniciar com chave inválida.
-- A listagem não descriptografa nada; só o `GET /vault-items/{id}` descriptografa, depois de verificar a propriedade.
-- **Isto não é criptografia de ponta a ponta.** O servidor precisa descriptografar para entregar o dado ao usuário; quem controla o servidor e a chave consegue ler os segredos.
-- Título, tipo, URL e descrição ficam em texto puro no banco, para listagem e busca.
+- O proprietário é determinado pelo usuário autenticado.
+- As operações de acesso ao cofre devem sempre filtrar pelo ID do proprietário.
+- Registros inexistentes e registros pertencentes a outros usuários devem receber respostas equivalentes, evitando exposição de informações.
+- DTOs não devem permitir que o cliente defina o proprietário.
 
-### Demais medidas
-- Bean Validation com limites de tamanho em todos os DTOs; corpo de requisição limitado a 64 KiB.
-- Consultas parametrizadas via JPA; schema gerenciado só pelo Flyway.
-- E-mail normalizado em minúsculas, com restrição de unicidade e `CHECK` no banco.
-- `@RestControllerAdvice` central: erros sem stack trace, SQL ou detalhes internos; mensagens do Jackson não são repassadas.
-- Cabeçalhos: `X-Content-Type-Options`, `X-Frame-Options: DENY`, HSTS, `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'` (nas respostas da API), `Referrer-Policy: no-referrer`, `Permissions-Policy` e `Cache-Control: no-store`.
-- CORS com origens explícitas (recusa `*`), credenciais habilitadas e apenas os cabeçalhos necessários.
-- Segredos de configuração só por variáveis de ambiente; `.env` no `.gitignore`; `toString()` dos DTOs sensíveis mascara senhas e segredos.
-- Frontend: segredos mantidos só em memória (sem `localStorage`), sem renderização de HTML do usuário (o React escapa o texto), links de URL só para `http(s)`, redirecionamento ao login quando a API responde 401. Essas verificações do frontend são apenas conveniência; a autorização real é do backend.
+### Criptografia
 
-## Trade-offs e decisões técnicas
+- AES-256-GCM para os campos confidenciais.
+- Nonce aleatório de 96 bits por operação de criptografia.
+- Tag de autenticação de 16 bytes.
+- Chave carregada por `VAULT_ENCRYPTION_KEY`, nunca armazenada no banco.
+- Validação da chave na inicialização.
+- Título, tipo, URL e descrição podem permanecer em texto puro para permitir listagem e busca, conforme a implementação.
 
-- **Cookie HttpOnly em vez de Bearer token no `localStorage`.** Um token em `localStorage` pode ser roubado por qualquer XSS. O custo do cookie é precisar de CSRF e de uma única origem (daí o proxy do Vite).
-- **JWT stateless.** Simplifica o backend, mas o logout apenas apaga o cookie: um token já emitido continua válido até expirar (ver limitações). Por isso a expiração é curta (60 min por padrão).
-- **Limitador de login em memória.** É simples e suficiente para um MVP de instância única, mas não sobrevive a reinício nem funciona com várias instâncias.
-- **Chave única de criptografia por ambiente.** O byte de versão no formato abre caminho para rotação, mas a rotação em si não foi implementada.
-- **Repositório restrito em vez de verificação manual.** Remove uma classe inteira de erros de autorização, ao custo de um pouco menos de conveniência.
-- **Sem bibliotecas de estado/requisição no frontend.** Um cliente `fetch` pequeno cobre as necessidades do MVP e reduz dependências.
-- **Fora do MVP por tempo e foco (96 h, 60% da avaliação em backend e segurança):** compartilhamento entre usuários, recuperação de conta, auditoria, rotação de chaves, OpenAPI, testes do frontend e CI.
+**A criptografia não é ponta a ponta.** O backend precisa descriptografar os dados para entregá-los ao usuário autorizado.
 
-## Limitações conhecidas
+### Outras medidas
 
-- O JWT não pode ser revogado no servidor antes de expirar; o logout só limpa o cookie.
-- O limitador de login é local à instância e perde o estado ao reiniciar. O cadastro não tem limitação de taxa.
-- O IP usado no limitador é o do socket. Atrás de um proxy reverso, todos os usuários parecem vir do mesmo IP até que isso seja configurado.
-- Não há rotação da chave de criptografia nem recuperação de conta/senha.
-- Sem auditoria de acessos aos segredos.
-- Em produção é necessário HTTPS (`COOKIE_SECURE=true`) e servir frontend e API na mesma origem (por exemplo, com proxy reverso). Essa configuração não está incluída.
-- Não foi feita análise de dependências nem teste de penetração.
-- O frontend não tem testes automatizados e ainda não foi compilado nem testado manualmente (ver aviso no topo).
+- Bean Validation nos DTOs.
+- Limite de tamanho do corpo das requisições.
+- Consultas parametrizadas via JPA.
+- Migrações gerenciadas pelo Flyway.
+- CORS com origens explicitamente configuradas.
+- Cabeçalhos de segurança HTTP.
+- Arquivo `.env` excluído do Git.
+- Frontend sem armazenamento persistente de segredos no `localStorage`.
 
-## Próximas versões
+Essas medidas precisam ser validadas nos testes e revisadas antes de uma implantação real.
 
-Itens **planejados, não implementados**:
+## 11. Decisões técnicas
+
+- **H2 em memória:** reduz o trabalho de configuração e facilita a demonstração local. A desvantagem é a perda dos dados ao encerrar a aplicação.
+- **Cookie HttpOnly em vez de JWT no localStorage:** reduz a exposição do token ao JavaScript, mas exige proteção CSRF.
+- **JWT stateless:** simplifica a autenticação, mas o logout não revoga um token já emitido no servidor.
+- **Limitador em memória:** adequado a uma única instância de MVP; perde o estado ao reiniciar.
+- **Repositório restrito por proprietário:** reduz o risco de acesso indevido a registros.
+- **Escopo reduzido:** prioriza backend, segurança, autenticação, criptografia e funcionalidades essenciais do cofre.
+
+## 12. Limitações conhecidas
+
+- Os dados do H2 em memória não são persistentes.
+- O JWT não pode ser revogado no servidor antes de expirar, salvo implementação adicional.
+- O limitador de login não compartilha estado entre instâncias.
+- Não há rotação automática da chave de criptografia.
+- Não há recuperação de conta ou senha.
+- Não há auditoria de acesso aos segredos.
+- O frontend não possui testes automatizados.
+- A implantação de produção, o proxy reverso e o HTTPS precisam ser configurados separadamente.
+- Não foi realizada auditoria de segurança ou teste de penetração.
+
+## 13. Próximas versões
+
+Itens planejados, não necessariamente implementados:
 
 - Compartilhamento temporário e revogável de registros.
+- Migração para banco persistente, como PostgreSQL.
 - Criptografia ponta a ponta.
 - Auditoria de acesso.
 - Rotação de chaves.
 - Recuperação segura de conta.
-- Limitação de tentativas mais robusta (compartilhada entre instâncias, também no cadastro).
+- Limitador de tentativas compartilhado entre instâncias.
 - Pipeline de integração contínua.
-- Revogação de tokens e refresh tokens.
-- OpenAPI/Swagger e testes do frontend.
+- Revogação de sessões e tokens.
+- OpenAPI/Swagger.
+- Testes automatizados do frontend.
 
-## Publicação no GitHub
+## 14. Publicação no GitHub
 
-1. Confirme que `.env` não será versionado: `git status` não deve listá-lo e `git check-ignore -v .env` deve apontar o `.gitignore`.
-2. Procure segredos antes do primeiro commit: `git grep -nIE "password|secret|key" -- ':!README.md' ':!*.example'` e revise o resultado.
-3. Crie o repositório público no GitHub e publique:
-   ```bash
-   git add -A
-   git commit -m "MVP do cofre digital seguro"
-   git branch -M main
-   git remote add origin https://github.com/<seu-usuario>/<repositorio>.git
-   git push -u origin main
-   ```
-4. Execute `mvn test` e `npm run build` antes de enviar e confirme que passam.
+Antes de publicar:
+
+1. Confira se `.env` está no `.gitignore`.
+2. Verifique se o arquivo não está sendo acompanhado pelo Git:
+
+```powershell
+git status
+git check-ignore -v .env
+```
+
+3. Revise os arquivos em busca de senhas, tokens e chaves. Não publique valores reais de configuração.
+4. Execute os testes:
+
+```powershell
+cd backend
+mvn test
+
+cd ../frontend
+npm run build
+```
+
+5. Após verificar os resultados, publique o projeto:
+
+```bash
+git add -A
+git commit -m "MVP do cofre digital seguro"
+git branch -M main
+git remote add origin https://github.com/SEU_USUARIO/SEU_REPOSITORIO.git
+git push -u origin main
+```
+
+Substitua o endereço pelo repositório real. Mantenha `example.env` apenas com valores fictícios e nunca versione o `.env` com segredos reais.
