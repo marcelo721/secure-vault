@@ -44,7 +44,7 @@ MVP full-stack de um cofre digital: usuários autenticados guardam credenciais, 
 | Camada | Tecnologias |
 |---|---|
 | Backend | Java 21, Spring Boot 3.5.7, Spring Web, Spring Security, Spring Data JPA, Bean Validation, Flyway, jjwt 0.12.6, Maven |
-| Banco | PostgreSQL 16 (instalado localmente, sem Docker) |
+| Banco | H2 database(Banco em memória) |
 | Testes | JUnit 5, Mockito, Spring Security Test, MockMvc |
 | Frontend | React 18, TypeScript, Vite 5, Tailwind CSS 3, React Router 6, lucide-react |
 
