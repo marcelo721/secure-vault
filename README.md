@@ -249,10 +249,9 @@ Com o `.env` criado e os pré-requisitos verificados, execute o arquivo `.bat` l
 Você pode dar dois cliques no arquivo pelo Explorador de Arquivos ou executá-lo pelo terminal:
 
 ```powershell
-.\<NOME_DO_ARQUIVO>.bat
+iniciar_cofre_digital.bat
 ```
 
-Substitua `<NOME_DO_ARQUIVO>` pelo nome real do arquivo `.bat` presente no projeto.
 
 O script é responsável por iniciar o backend e o frontend conforme sua implementação. Mantenha as janelas de terminal abertas enquanto estiver utilizando a aplicação.
 
