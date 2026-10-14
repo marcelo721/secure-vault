@@ -183,7 +183,7 @@ secure-vault/
 Clone o repositório GitHub:
 
 ```powershell
-git clone <URL_DO_REPOSITORIO>
+git clone https://github.com/marcelo721/secure-vault
 ```
 
 Entre na pasta do projeto clonado:
@@ -192,7 +192,6 @@ Entre na pasta do projeto clonado:
 cd secure-vault
 ```
 
-Substitua `<URL_DO_REPOSITORIO>` pela URL real do repositório. Caso a pasta tenha outro nome, utilize o nome correspondente.
 
 ### 7.2. Verificar os pré-requisitos
 
@@ -262,7 +261,47 @@ Quando os serviços estiverem disponíveis, acesse o frontend:
 Se o navegador abrir antes de o frontend estar pronto, aguarde alguns segundos e atualize a página.
 
 Caso a aplicação não inicie, confira as mensagens exibidas nos terminais e verifique se as portas 8080 (backend) e 5173 (frontend) estão livres.
+Pré-requisitos e instalação
 
+Antes de executar o Cofre Digital Seguro, instale o Java JDK 21 e o Node.js 20. No Windows, você pode instalar ambos pelo terminal utilizando o Windows Package Manager (winget).
+
+### Instalar o Java 21
+
+Abra o PowerShell ou CMD e execute:
+```powershell
+winget install --id Microsoft.OpenJDK.21 -e --source winget
+```
+
+
+Verifique a instalação:
+
+java -version
+javac -version
+
+2. Instalar o Node.js 20
+
+Execute no terminal:
+```powershell
+winget install --id OpenJS.NodeJS.20 -e --source winget
+```
+
+
+Verifique a instalação do Node.js e do npm:
+
+node -v
+npm -v
+
+O Node.js deve apresentar uma versão v20.x.
+
+3. Preparar o ambiente
+
+Após instalar os requisitos, feche e abra novamente o terminal para atualizar as variáveis de ambiente.
+
+O backend utiliza o Spring Boot e o Maven Wrapper (mvnw.cmd), que permite executar o Maven sem precisar instalá-lo globalmente. Na primeira execução, é necessário ter conexão com a internet para baixar o Maven e as dependências do projeto.
+
+O frontend utiliza React, Vite e npm para instalar as dependências e iniciar o servidor de desenvolvimento.
+
+Observação: o banco de dados e as variáveis de ambiente definidas no arquivo .env também precisam estar configurados conforme os requisitos do projeto.
 ## 8. Acessando o banco de dados H2
 
 O projeto utiliza o **H2 Database em memória** para armazenar os dados durante a execução local. O banco é inicializado pelo backend, e as migrações do Flyway são executadas na inicialização.
