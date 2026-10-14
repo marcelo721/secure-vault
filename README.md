@@ -176,149 +176,151 @@ secure-vault/
 - npm.
 
 **Não é necessário instalar PostgreSQL.** O projeto utiliza H2 em memória para simplificar a execução local.
+## 7. Configuração do ambiente e execução
 
-## 7. Configuração do ambiente
+### 7.1. Clonar o repositório
 
-### 7.1. Arquivo de variáveis
-
-Na raiz do repositório, mantenha `example.env` como modelo e crie uma cópia chamada `.env`.
-
-No PowerShell, execute a partir da raiz do projeto:
+Clone o repositório GitHub:
 
 ```powershell
-Copy-Item example.env .env
+git clone <URL_DO_REPOSITORIO>
 ```
 
-Edite o arquivo `.env` e configure as variáveis:
+Entre na pasta do projeto clonado:
 
-| Variável | Descrição |
-|---|---|
-| `JWT_SECRET` | Segredo utilizado para assinar os JWTs. Utilize um valor forte, com pelo menos 32 caracteres. |
-| `JWT_EXPIRATION_MINUTES` | Duração da sessão em minutos. Padrão: 60. |
-| `VAULT_ENCRYPTION_KEY` | Chave AES-256 de exatamente 32 bytes, codificada em Base64. |
-| `COOKIE_SECURE` | `false` para desenvolvimento local em HTTP; `true` em produção com HTTPS. |
-| `CORS_ALLOWED_ORIGINS` | Origens autorizadas, como `http://localhost:5173`. |
+```powershell
+cd secure-vault
+```
 
-Exemplo de estrutura:
+Substitua `<URL_DO_REPOSITORIO>` pela URL real do repositório. Caso a pasta tenha outro nome, utilize o nome correspondente.
 
-```properties
-JWT_SECRET=SUBSTITUA_POR_UM_SEGREDO_FORTE
+### 7.2. Verificar os pré-requisitos
+
+Antes de executar o projeto, verifique se os seguintes programas estão instalados:
+
+- **Java 21**
+- **Node.js 20**
+- **Git**
+
+Abra o PowerShell ou o Prompt de Comando e execute:
+
+```powershell
+java -version
+node -v
+npm -v
+git --version
+```
+
+Confirme se o Java corresponde à versão 21 e se o Node.js corresponde à versão 20. O npm é instalado junto com o Node.js.
+
+O projeto utiliza Maven para o backend. Se o repositório incluir o Maven Wrapper (`mvnw.cmd`), não será necessário instalar o Maven globalmente. Caso contrário, instale o Maven 3.9 ou superior.
+
+### 7.3. Criar o arquivo `.env`
+
+Na raiz do repositório clonado, crie um arquivo chamado `.env`, no mesmo nível do `README.md` e do arquivo `.bat`.
+
+O arquivo deve conter as seguintes variáveis:
+
+```dotenv
+# JWT - autenticação
+JWT_SECRET=4799078a7fc2f4766d01c6131eed4bdeb53c4d745e9e9aba6f0521dca0e4bb32
 JWT_EXPIRATION_MINUTES=60
-VAULT_ENCRYPTION_KEY=SUBSTITUA_PELA_CHAVE_BASE64
+
+# Criptografia dos arquivos do cofre
+VAULT_ENCRYPTION_KEY=jkZTwubXTYnj/1aljZGGI5pTSXrR51rwMbQxWcj+Pys=
+
+# Cookies
 COOKIE_SECURE=false
+
+# CORS - endereço do frontend
 CORS_ALLOWED_ORIGINS=http://localhost:5173
 ```
 
-Os valores acima são ilustrativos. Gere seus próprios segredos e não publique o arquivo `.env`.
+**Atenção:** os valores acima são exemplos de configuração para desenvolvimento local. Para uso real, gere um `JWT_SECRET` forte e independente e uma chave AES-256 aleatória de 32 bytes, codificada em Base64, para `VAULT_ENCRYPTION_KEY`.
 
-### 7.2. Geração das chaves no Windows
+Mantenha o arquivo `.env` fora do Git. Não publique suas chaves nem as compartilhe em repositórios públicos.
 
-Para gerar a chave de criptografia AES-256 no PowerShell:
+A chave de criptografia deve permanecer a mesma enquanto existirem registros criptografados com ela. Se ela for perdida ou substituída, os dados existentes poderão ficar irrecuperáveis.
+
+### 7.4. Executar o projeto
+
+Com o `.env` criado e os pré-requisitos verificados, execute o arquivo `.bat` localizado na raiz do repositório.
+
+Você pode dar dois cliques no arquivo pelo Explorador de Arquivos ou executá-lo pelo terminal:
 
 ```powershell
-$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-$key = New-Object byte[] 32
-$rng.GetBytes($key)
-[Convert]::ToBase64String($key)
-$rng.Dispose()
+.\<NOME_DO_ARQUIVO>.bat
 ```
 
-Copie o resultado para `VAULT_ENCRYPTION_KEY` no `.env`.
+Substitua `<NOME_DO_ARQUIVO>` pelo nome real do arquivo `.bat` presente no projeto.
 
-O resultado representa 32 bytes aleatórios em Base64. Não gere uma chave nova a cada inicialização: registros criptografados com a chave anterior não poderão ser descriptografados com outra chave.
+O script é responsável por iniciar o backend e o frontend conforme sua implementação. Mantenha as janelas de terminal abertas enquanto estiver utilizando a aplicação.
 
-Para o `JWT_SECRET`, utilize um segredo forte, independente da chave AES.
+Quando os serviços estiverem disponíveis, acesse o frontend:
 
-### 7.3. Carregamento das variáveis pelo Spring Boot
+**http://localhost:5173**
 
-No `backend/src/main/resources/application.properties`, a configuração para carregar o `.env` da raiz do repositório, ao executar a aplicação a partir de `backend/`, é:
+Se o navegador abrir antes de o frontend estar pronto, aguarde alguns segundos e atualize a página.
 
-```properties
-spring.application.name=secure-vault
-spring.config.import=optional:file:../.env[.properties]
+Caso a aplicação não inicie, confira as mensagens exibidas nos terminais e verifique se as portas 8080 (backend) e 5173 (frontend) estão livres.
 
-app.jwt.secret=${JWT_SECRET}
-app.jwt.expiration-minutes=${JWT_EXPIRATION_MINUTES:60}
-app.jwt.issuer=secure-vault
+## 8. Acessando o banco de dados H2
 
-app.crypto.key=${VAULT_ENCRYPTION_KEY}
+O projeto utiliza o **H2 Database em memória** para armazenar os dados durante a execução local. O banco é inicializado pelo backend, e as migrações do Flyway são executadas na inicialização.
 
-app.cookie.secure=${COOKIE_SECURE:false}
-app.cors.allowed-origins=${CORS_ALLOWED_ORIGINS:http://localhost:5173}
-```
+Para visualizar as tabelas e consultar os dados, siga os passos abaixo.
 
-O caminho `../.env` depende do diretório de trabalho da aplicação. Se você executar o backend a partir de outro diretório, ajuste o caminho.
+### 8.1. Abrir o H2 Console
 
-O Spring Boot não carrega automaticamente arquivos `.env`: a propriedade `spring.config.import` é responsável por importar o arquivo. O nome configurado deve corresponder ao arquivo real.
+Com o backend em execução, abra o navegador e acesse:
 
-O arquivo `example.env` serve apenas como modelo. Ele não será carregado pela configuração acima, a menos que o caminho seja alterado explicitamente.
+**http://localhost:8080/h2-console**
 
-Variáveis de ambiente do sistema podem sobrescrever os valores do arquivo importado.
+A interface de conexão do H2 será exibida.
 
-### 7.4. Banco de dados H2
+### 8.2. Preencher os dados de conexão
 
-O projeto utiliza H2 em memória, configurado no `application.properties`:
+Na tela de login do H2 Console, utilize os seguintes valores:
+
+| Campo | Valor |
+|---|---|
+| Saved Settings | Generic H2 (Embedded), se disponível |
+| Driver Class | `org.h2.Driver` |
+| JDBC URL | `jdbc:h2:mem:securevault` |
+| User Name | `sa` |
+| Password | Deixe vazio |
+
+Clique em **Connect** para estabelecer a conexão.
+
+A URL JDBC deve corresponder ao banco configurado no `application.properties`:
 
 ```properties
 spring.datasource.url=jdbc:h2:mem:securevault;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-spring.datasource.driver-class-name=org.h2.Driver
-spring.datasource.username=sa
-spring.datasource.password=
-
-spring.jpa.open-in-view=false
-spring.jpa.hibernate.ddl-auto=validate
-spring.jpa.properties.hibernate.jdbc.time_zone=UTC
-
-spring.flyway.enabled=true
-spring.flyway.locations=classpath:db/migration
 ```
 
-O Flyway executa as migrações na inicialização, e o Hibernate valida o esquema existente.
+**Importante:** no campo JDBC URL, utilize `jdbc:h2:mem:securevault`, e não um caminho de arquivo como `C:/Users/.../test`. O projeto está configurado para utilizar um banco em memória.
 
-**Limitação importante:** o banco é volátil. Os registros armazenados são perdidos quando a aplicação termina e o banco em memória é encerrado. Essa configuração é adequada para desenvolvimento e demonstração, mas não para armazenar dados reais de forma persistente.
+### 8.3. Consultar as tabelas
 
-## 8. Executando
+Após conectar, utilize o painel lateral para visualizar as tabelas existentes ou execute consultas SQL no editor.
 
-### Backend
+Por exemplo, para listar as tabelas do esquema atual:
 
-Em um terminal, a partir da raiz do projeto:
-
-```powershell
-cd backend
-mvn spring-boot:run
+```sql
+SELECT TABLE_NAME
+FROM INFORMATION_SCHEMA.TABLES
+WHERE TABLE_SCHEMA = 'PUBLIC';
 ```
 
-O backend será iniciado na porta 8080, caso não exista outra configuração.
+Para consultar os registros de uma tabela, utilize o nome correspondente ao esquema criado pelas migrações do Flyway. Por exemplo:
 
-### Frontend
-
-Em outro terminal:
-
-```powershell
-cd frontend
-npm install
-npm run dev
+```sql
+SELECT * FROM USERS;
 ```
 
-Abra:
+O nome `USERS` é apenas ilustrativo: utilize o nome real da tabela caso seja diferente no seu projeto.
 
-`http://localhost:5173`
-
-O Vite encaminha as requisições `/api` para o backend em `http://localhost:8080`, conforme a configuração do proxy.
-
-Crie uma conta, faça login e teste as operações do cofre.
-
-### Build de produção
-
-Na pasta `frontend`:
-
-```powershell
-npm run build
-```
-
-Os arquivos gerados ficam em `frontend/dist`.
-
-O projeto ainda exige configuração de hospedagem do frontend e de proxy reverso para uma implantação de produção. Utilize HTTPS e `COOKIE_SECURE=true` em produção.
+**Observação sobre os dados:** o H2 é volátil. Os dados são mantidos enquanto a instância do banco estiver ativa, mas podem ser perdidos quando a aplicação é encerrada e o banco em memória é destruído. Para consultar o banco, mantenha o backend em execução.
 
 ## 9. Testes
 
