@@ -1,24 +1,57 @@
-# Perfil de testes: usa o banco dedicado vault_test_db.
-# As credenciais do banco vêm do .env/variáveis de ambiente (DB_USERNAME/DB_PASSWORD),
-# a menos que TEST_DB_USERNAME/TEST_DB_PASSWORD sejam definidos.
-# JWT_SECRET e a chave de criptografia abaixo são valores fictícios, válidos somente para testes.
-spring:
-  datasource:
-    url: ${TEST_DB_URL:jdbc:postgresql://localhost:5432/vault_test_db}
-    username: ${TEST_DB_USERNAME:${DB_USERNAME}}
-    password: ${TEST_DB_PASSWORD:${DB_PASSWORD}}
+  ```yaml
+  # Perfil de testes do Cofre Digital Seguro
 
-app:
-  jwt:
-    secret: test-only-jwt-secret-not-for-production-0123456789abcdef
-    expiration-minutes: 60
-  crypto:
-    key: dGVzdC1vbmx5LWtleS0zMi1ieXRlcy1sb25nLTEyMzQ=
-  password:
-    bcrypt-strength: 4
-  login-attempts:
-    max-failures: 5
-    window-minutes: 15
-    lock-minutes: 15
-  request:
-    max-body-bytes: 65536
+  spring:
+    datasource:
+      url: jdbc:h2:mem:securevault_test;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+      driver-class-name: org.h2.Driver
+      username: sa
+      password:
+
+    jpa:
+      open-in-view: false
+      hibernate:
+        ddl-auto: validate
+      properties:
+        hibernate:
+          jdbc:
+            time_zone: UTC
+
+    flyway:
+      enabled: true
+      locations: classpath:db/migration
+
+    jackson:
+      deserialization:
+        fail-on-unknown-properties: true
+
+    autoconfigure:
+      exclude:
+        - org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+
+  app:
+    jwt:
+      secret: test-only-jwt-secret-not-for-production-0123456789abcdef
+      expiration-minutes: 60
+      issuer: secure-vault
+
+    crypto:
+      key: dGVzdC1vbmx5LWtleS0zMi1ieXRlcy1sb25nLTEyMzQ=
+
+    cookie:
+      secure: false
+
+    cors:
+      allowed-origins: http://localhost:5173
+
+    password:
+      bcrypt-strength: 4
+
+    login-attempts:
+      max-failures: 5
+      window-minutes: 15
+      lock-minutes: 15
+
+    request:
+      max-body-bytes: 65536
+    ```
